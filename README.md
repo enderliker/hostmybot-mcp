@@ -170,6 +170,13 @@ node /home/ender/projects/hostmybot-mcp/dist/index.js \
 ## Development & Testing
 
 ```bash
-npm test       # Run Vitest unit & protocol tests
-npm run build  # Compile TypeScript to dist/
+npm run typecheck  # Strict TypeScript type checking
+npm test           # Run Vitest unit & MCP protocol tests
+npm run build      # Compile TypeScript to dist/
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md), and [ADR-0001](docs/decisions/0001-architecture.md) for development guidelines and architectural context.
+
+## License
+
+[MIT](LICENSE) © 2026 enderliker
