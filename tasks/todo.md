@@ -213,3 +213,161 @@
 - [x] Full test suite passes (`npm test`)
 - [x] Clean build (`npm run build`)
 - [x] Ready to wire into Antigravity / Claude Code / Codex
+
+---
+
+## Task 9: Add live WebSocket console credentials and log reader
+
+**Description:** Add `get_websocket_credentials` (`GET /api/client/servers/{id}/websocket`) and `get_console_logs` (connects briefly via Node WebSocket with `Origin` header set to `baseUrl`, authenticates with JWT token, requests `send logs`, strips ANSI codes by default, and returns the latest lines) in `src/tools/servers.ts` and `src/client.ts`.
+
+**Acceptance criteria:**
+- [x] `get_websocket_credentials` returns `{ socket, token }`
+- [x] `get_console_logs` supports `max_lines` (default `100`), `timeout_ms` (default `2500`), and `strip_ansi` (default `true`)
+- [x] WebSocket connection is always closed cleanly in `finally`, even on timeout or auth failure
+
+**Verification:**
+- [x] Tests pass: `npm test -- servers`
+- [x] Build succeeds: `npm run build`
+
+**Dependencies:** Task 3
+
+**Files likely touched:**
+- `src/client.ts`
+- `src/tools/servers.ts`
+- `tests/tools/servers.test.ts`
+
+**Estimated scope:** Medium (3 files)
+
+---
+
+## Task 10: Add system permissions and account/server activity audit logs
+
+**Description:** Add `list_permissions` (`GET /api/client/permissions` with optional `category` filter for compact output), `get_account_activity` (`GET /api/client/account/activity`), and `get_server_activity` (`GET /api/client/servers/{id}/activity`) with compact event formatting.
+
+**Acceptance criteria:**
+- [x] `list_permissions` optionally filters by category (e.g. `file`, `control`, `backup`) to keep responses small
+- [x] Activity tools support `page` and `per_page` and return `{ events, pagination }`
+
+**Verification:**
+- [x] Tests pass: `npm test -- account servers`
+- [x] Build succeeds: `npm run build`
+
+**Dependencies:** Tasks 3, 8
+
+**Files likely touched:**
+- `src/tools/account.ts`
+- `src/tools/servers.ts`
+- `tests/tools/account.test.ts`
+- `tests/tools/servers.test.ts`
+
+**Estimated scope:** Small (3-4 files)
+
+---
+
+## Task 11: Add server database management module
+
+**Description:** Create `src/tools/databases.ts` and register it in `src/index.ts` for `list_databases`, `create_database`, `rotate_database_password`, and `delete_database`.
+
+**Acceptance criteria:**
+- [x] `list_databases` supports optional `include_password` (default `false` for security/token hygiene)
+- [x] `create_database` sends `{ database, remote }` to `POST /api/client/servers/{id}/databases`
+- [x] `delete_database` has `destructiveHint: true`
+
+**Verification:**
+- [x] Tests pass: `npm test -- databases`
+- [x] Build succeeds: `npm run build`
+
+**Dependencies:** Task 2
+
+**Files likely touched:**
+- `src/tools/databases.ts`
+- `src/index.ts`
+- `tests/tools/databases.test.ts`
+
+**Estimated scope:** Small (3 files)
+
+---
+
+## Checkpoint: After Tasks 9-11
+- [x] All tests pass (`npm test`)
+- [x] Build succeeds (`npm run build`)
+
+---
+
+## Task 12: Add remote file pull and full network allocation CRUD
+
+**Description:** Add `pull_remote_file` (`POST /api/client/servers/{id}/files/pull`) to `src/tools/files.ts`, and add `create_allocation`, `update_allocation_notes`, `set_primary_allocation`, and `delete_allocation` to `src/tools/settings.ts`.
+
+**Acceptance criteria:**
+- [x] `pull_remote_file` supports `url`, optional `directory`, `filename`, `use_header`, and `foreground`
+- [x] Network allocation mutations hit the exact Pterodactyl endpoints and annotate `delete_allocation` as destructive
+
+**Verification:**
+- [x] Tests pass: `npm test -- files settings`
+- [x] Build succeeds: `npm run build`
+
+**Dependencies:** Tasks 4, 6
+
+**Files likely touched:**
+- `src/tools/files.ts`
+- `src/tools/settings.ts`
+- `tests/tools/files.test.ts`
+- `tests/tools/settings.test.ts`
+
+**Estimated scope:** Small (4 files)
+
+---
+
+## Task 13: Add update/get/lock tools for schedules, backups, and subusers
+
+**Description:** Add `get_schedule`, `update_schedule`, `update_schedule_task`, `delete_schedule_task`, `get_backup`, and `toggle_backup_lock` to `src/tools/automation.ts`, plus `get_subuser` and `update_subuser` to `src/tools/account.ts`.
+
+**Acceptance criteria:**
+- [x] All 8 tools validate parameters with `zod` and return compact normalized responses
+- [x] `delete_schedule_task` has `destructiveHint: true`
+
+**Verification:**
+- [x] Tests pass: `npm test -- automation account`
+- [x] Build succeeds: `npm run build`
+
+**Dependencies:** Tasks 7, 8
+
+**Files likely touched:**
+- `src/tools/automation.ts`
+- `src/tools/account.ts`
+- `tests/tools/automation.test.ts`
+- `tests/tools/account.test.ts`
+
+**Estimated scope:** Small (4 files)
+
+---
+
+## Task 14: Add account API keys & SSH keys tools and update README
+
+**Description:** Add `list_api_keys`, `create_api_key`, `delete_api_key`, `list_ssh_keys`, `add_ssh_key`, and `remove_ssh_key` to `src/tools/account.ts`, update `README.md` with the complete 65-tool catalog, and verify build + tests + live read-only smoke test.
+
+**Acceptance criteria:**
+- [x] `delete_api_key` and `remove_ssh_key` have `destructiveHint: true`
+- [x] `README.md` documents all 65 tools accurately
+- [x] All unit tests, `npm run build`, and live read-only smoke check pass
+
+**Verification:**
+- [x] Tests pass: `npm test`
+- [x] Build succeeds: `npm run build`
+- [x] Manual check: live read-only smoke test against panel API (`list_permissions`, `get_console_logs`, `get_account_activity`, `list_api_keys`)
+
+**Dependencies:** Tasks 9-13
+
+**Files likely touched:**
+- `src/tools/account.ts`
+- `README.md`
+- `tests/tools/account.test.ts`
+
+**Estimated scope:** Medium (3 files)
+
+---
+
+## Checkpoint: Full API Coverage
+- [x] Full test suite passes (`npm test`)
+- [x] Clean build (`npm run build`)
+- [x] 100% HostMyBot Client API coverage verified

@@ -88,20 +88,24 @@ node /home/ender/projects/hostmybot-mcp/dist/index.js \
   --url https://client.hostmybot.net
 ```
 
-## Available Tools (37)
+## Available Tools (65)
 
-### Servers, Power & Console
+### Servers, Power, Live Console & Activity
 - `list_servers` — List accessible servers with compact summary (ID, name, node, limits, primary address, SFTP).
 - `get_server` — Get detailed server configuration (optionally include startup variables).
 - `get_server_resources` — Live state, CPU %, memory, disk, network RX/TX, and uptime.
 - `send_power_signal` — Send `start`, `stop`, `restart`, or `kill`.
 - `send_console_command` — Execute a console command on a running server.
+- `get_websocket_credentials` — Get the Wings WebSocket URL and JWT token for live streaming.
+- `get_console_logs` — Connect briefly to the console WebSocket, read recent lines (ANSI-stripped by default), and disconnect.
+- `get_server_activity` — View recent server audit activity logs.
 
 ### Filesystem
 - `list_files` — List directory entries sorted folders-first with human-readable sizes.
 - `read_file_contents` — Read text file contents (auto-capped at `max_chars`, default `50000`).
 - `write_file` — Create or overwrite a text file directly.
 - `upload_file` — Upload a local file (binary or text) via Wings signed upload URL (`multipart/form-data`).
+- `pull_remote_file` — Download a file from a remote HTTP/HTTPS URL directly into a server directory.
 - `get_download_url` — Generate a signed download URL for a remote file.
 - `create_folder` — Create a directory.
 - `rename_files` — Rename or move files/folders.
@@ -111,31 +115,57 @@ node /home/ender/projects/hostmybot-mcp/dist/index.js \
 - `decompress_file` — Extract an archive.
 - `chmod_files` — Update Unix file permissions.
 
-### Startup, Settings & Network
+### Databases
+- `list_databases` — List server databases (passwords hidden unless `include_password=true`).
+- `create_database` — Provision a new database.
+- `rotate_database_password` — Rotate a database password and return the new credential.
+- `delete_database` — Permanently delete a database.
+
+### Startup, Settings & Network Allocations
 - `get_startup_variables` — View startup command, Docker images, and environment variables.
 - `update_startup_variable` — Update an editable startup variable (e.g. `MAIN_FILE`).
 - `rename_server` — Update server name and description.
 - `set_docker_image` — Switch Docker runtime image.
 - `reinstall_server` — Trigger server reinstall (requires `confirm: true`).
 - `list_allocations` — List IP/port allocations.
+- `create_allocation` — Auto-assign a new allocation within server limits.
+- `update_allocation_notes` — Update allocation notes.
+- `set_primary_allocation` — Set an allocation as primary/default.
+- `delete_allocation` — Remove a non-primary allocation.
 
 ### Backups & Schedules (Cron)
 - `list_backups` — List existing backups and sizes.
+- `get_backup` — Get metadata for a single backup.
 - `create_backup` — Create a new backup.
 - `get_backup_download_url` — Generate a signed backup download URL.
 - `restore_backup` — Restore a backup (optional `truncate: true`).
+- `toggle_backup_lock` — Lock or unlock a backup against deletion.
 - `delete_backup` — Delete a backup.
 - `list_schedules` — List cron schedules and their tasks.
+- `get_schedule` — Get details and tasks for a single schedule.
 - `create_schedule` — Create a new cron schedule.
-- `create_schedule_task` — Add a `command`, `power`, or `backup` task to a schedule.
-- `execute_schedule` — Trigger a schedule immediately.
+- `update_schedule` — Update a cron schedule.
 - `delete_schedule` — Remove a schedule.
+- `execute_schedule` — Trigger a schedule immediately.
+- `create_schedule_task` — Add a `command`, `power`, or `backup` task to a schedule.
+- `update_schedule_task` — Update an existing schedule task.
+- `delete_schedule_task` — Delete a task from a schedule.
 
-### Account & Subusers
+### Account, Permissions, Subusers, API Keys & SSH Keys
 - `get_account` — Get authenticated account info.
+- `get_account_activity` — View recent account audit activity logs.
+- `list_permissions` — List valid Pterodactyl permission nodes (optionally filtered by category).
 - `list_subusers` — List subusers and their permissions.
+- `get_subuser` — Get a single subuser's details and permissions.
 - `create_subuser` — Invite a subuser with specific permissions.
+- `update_subuser` — Replace a subuser's permission nodes.
 - `delete_subuser` — Remove a subuser.
+- `list_api_keys` — List client API keys on the account.
+- `create_api_key` — Create a new client API key.
+- `delete_api_key` — Revoke and delete a client API key.
+- `list_ssh_keys` — List registered SFTP SSH keys.
+- `add_ssh_key` — Add an SSH public key.
+- `remove_ssh_key` — Remove an SSH public key by fingerprint.
 
 ## Development & Testing
 

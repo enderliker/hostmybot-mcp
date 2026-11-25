@@ -51,7 +51,20 @@ Task 1: Project Scaffolding & Config Loader (env + CLI args)
 - [x] Full test suite and TypeScript build pass with zero errors
 - [x] MCP server verified end-to-end via MCP client config
 
+### Phase 4: Full HostMyBot / Pterodactyl Client API Coverage (Tasks 9–14)
+- [x] Task 9: Add live WebSocket console credentials and log reader (`get_websocket_credentials`, `get_console_logs`)
+- [x] Task 10: Add system permissions and account/server activity audit logs
+- [x] Task 11: Add server database management module (`src/tools/databases.ts`)
+- [x] Task 12: Add remote file pull (`files/pull`) and full network allocation CRUD
+- [x] Task 13: Add update/get/lock tools for schedules, schedule tasks, backups, and subusers
+- [x] Task 14: Add account API keys & SSH keys tools and update `README.md` catalog
+
+### Checkpoint: Full API Coverage
+- [x] Full test suite and TypeScript build pass with zero errors
+- [x] Live read-only smoke test verifies new endpoints (`list_permissions`, `get_console_logs`, `get_account_activity`, `list_api_keys`)
+
 ## Risks & Mitigations
 - **Wings CORS / Signed Upload URLs:** Wings upload URLs expect `multipart/form-data` with field name `files` and optional `?directory=...` query param. Test this explicitly in Task 5.
-- **Destructive Actions:** Tools like `reinstall_server`, `delete_files`, `delete_backup`, and `power` (`kill`/`stop`) can cause data loss or downtime; mark them clearly in tool descriptions so agents confirm intent before invoking.
+- **Destructive Actions:** Tools like `reinstall_server`, `delete_files`, `delete_backup`, `delete_database`, `delete_api_key`, and `power` (`kill`/`stop`) can cause data loss or downtime; mark them clearly in tool descriptions so agents confirm intent before invoking.
+- **Wings WebSocket Console (`get_console_logs`):** Wings requires sending an `Origin` header matching the panel URL (`https://client.hostmybot.net`) when upgrading to WebSocket, and outputs ANSI color codes. Strip ANSI sequences by default and bound connection time with a short idle/timeout window.
 - **Rate Limits:** Pterodactyl defaults to 300 req/min (`X-RateLimit-Remaining`). Surface `429` status clearly in `src/client.ts`.
