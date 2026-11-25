@@ -12,8 +12,12 @@ export function isHelpRequested(argv: string[] = process.argv.slice(2)): boolean
 function readFlag(argv: string[], flagName: string): string | undefined {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === flagName && i + 1 < argv.length) {
-      return argv[i + 1];
+    if (arg === flagName) {
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        return next;
+      }
+      return undefined;
     }
     if (arg.startsWith(`${flagName}=`)) {
       return arg.slice(flagName.length + 1);
@@ -32,6 +36,12 @@ export function normalizeBaseUrl(rawUrl: string): string {
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error(`Invalid HOSTMYBOT_URL protocol "${parsed.protocol}". Expected http: or https:.`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("HOSTMYBOT_URL must not contain embedded credentials.");
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error("HOSTMYBOT_URL must not contain query parameters or fragments.");
   }
   return trimmed;
 }

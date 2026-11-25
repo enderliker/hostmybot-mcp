@@ -92,14 +92,7 @@ export function registerAccountTools(server: McpServer, client: PterodactylClien
         `/api/client/servers/${encodeURIComponent(server_id)}/users`,
       );
       return {
-        users: res.data.map((u) => ({
-          uuid: u.attributes.uuid,
-          username: u.attributes.username,
-          email: u.attributes.email,
-          two_factor_enabled: u.attributes["2fa_enabled"],
-          permissions: u.attributes.permissions,
-          created_at: u.attributes.created_at,
-        })),
+        users: res.data.map((u) => summarizeSubuser(u.attributes)),
       };
     }),
   );

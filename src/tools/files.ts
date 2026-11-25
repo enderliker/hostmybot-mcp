@@ -84,12 +84,17 @@ export function registerFileTools(server: McpServer, client: PterodactylClient):
       const content = await client.request<string>(
         "GET",
         `/api/client/servers/${encodeURIComponent(server_id)}/files/contents`,
-        { query: { file }, responseType: "text" },
+        {
+          query: { file },
+          responseType: "text",
+          maxBytes: max_chars * 4 + 4,
+        },
       );
-      if (content.length <= max_chars) {
-        return content;
+      const text = content ?? "";
+      if (text.length <= max_chars) {
+        return text;
       }
-      return `${content.slice(0, max_chars)}\n\n[Truncated at ${max_chars} of ${content.length} chars]`;
+      return `${text.slice(0, max_chars)}\n\n[Truncated at ${max_chars} chars (file had ${text.length}+ chars)]`;
     }),
   );
 
@@ -134,13 +139,30 @@ export function registerFileTools(server: McpServer, client: PterodactylClient):
       annotations: { readOnlyHint: false },
     },
     withToolHandler(async ({ server_id, local_path, directory = "/", remote_filename }) => {
+      const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
       const resolvedPath = path.resolve(local_path);
       const info = await stat(resolvedPath);
       if (!info.isFile()) {
         throw new Error(`Path is not a regular file: ${resolvedPath}`);
       }
+      if (info.size > MAX_UPLOAD_BYTES) {
+        throw new Error(
+          `File size (${formatBytes(info.size)}) exceeds the ${formatBytes(MAX_UPLOAD_BYTES)} upload limit.`,
+        );
+      }
+
+      let filename = path.basename(resolvedPath);
+      if (remote_filename !== undefined) {
+        const trimmed = remote_filename.trim();
+        if (!trimmed || /[/\\]/.test(trimmed) || trimmed === "." || trimmed === "..") {
+          throw new Error(
+            "Invalid remote_filename: must be a plain filename without path separators or traversal.",
+          );
+        }
+        filename = trimmed;
+      }
+
       const bytes = await readFile(resolvedPath);
-      const filename = remote_filename?.trim() || path.basename(resolvedPath);
 
       const uploadMeta = await client.request<SignedUrlResponse>(
         "GET",
@@ -321,7 +343,10 @@ export function registerFileTools(server: McpServer, client: PterodactylClient):
           .array(
             z.object({
               file: z.string().min(1),
-              mode: z.string().min(3).max(4).describe("Octal permissions, e.g. '755' or '0644'"),
+              mode: z
+                .string()
+                .regex(/^[0-7]{3,4}$/, "Expected 3- or 4-digit octal mode (e.g. '755' or '0644')")
+                .describe("Octal permissions, e.g. '755' or '0644'"),
             }),
           )
           .min(1),
@@ -342,7 +367,13 @@ export function registerFileTools(server: McpServer, client: PterodactylClient):
       description: "Download a file directly from a remote HTTP/HTTPS URL into a server directory.",
       inputSchema: {
         server_id: z.string().min(1).describe("Short server identifier"),
-        url: z.string().url().describe("Remote HTTP/HTTPS URL to pull"),
+        url: z
+          .string()
+          .url()
+          .refine((val) => val.startsWith("http://") || val.startsWith("https://"), {
+            message: "URL must use http:// or https://",
+          })
+          .describe("Remote HTTP/HTTPS URL to pull"),
         directory: z.string().optional().describe("Destination directory inside container (default '/')"),
         filename: z.string().optional().describe("Optional filename override on the server"),
         use_header: z
@@ -359,6 +390,7 @@ export function registerFileTools(server: McpServer, client: PterodactylClient):
     withToolHandler(async ({ server_id, url, directory = "/", filename, use_header, foreground = true }) => {
       await client.request("POST", `/api/client/servers/${encodeURIComponent(server_id)}/files/pull`, {
         body: { url, directory, filename, use_header, foreground },
+        timeoutMs: foreground ? 120_000 : 30_000,
       });
       return { ok: true, server_id, url, directory, filename };
     }),

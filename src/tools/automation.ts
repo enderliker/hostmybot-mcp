@@ -71,6 +71,7 @@ function summarizeSchedule(s: ScheduleAttributes) {
       action: t.attributes.action,
       payload: t.attributes.payload,
       time_offset: t.attributes.time_offset,
+      continue_on_failure: t.attributes.continue_on_failure,
     })),
   };
 }
@@ -89,13 +90,14 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
     withToolHandler(async ({ server_id, page }) => {
       const res = await client.request<{
         data: Array<{ attributes: BackupAttributes }>;
-        meta?: { backup_count?: number };
+        meta?: { backup_count?: number; pagination?: Record<string, unknown> };
       }>("GET", `/api/client/servers/${encodeURIComponent(server_id)}/backups`, {
         query: { page },
       });
       return {
         backup_count: res.meta?.backup_count ?? res.data.length,
         backups: res.data.map((b) => summarizeBackup(b.attributes)),
+        pagination: res.meta?.pagination,
       };
     }),
   );
@@ -145,7 +147,7 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
     "restore_backup",
     {
       description:
-        "Restore a server backup. Setting truncate=true wipes all existing server files before restoring.",
+        "Restore a server backup. Setting truncate=true wipes all existing server files before restoring and requires confirm=true.",
       inputSchema: {
         server_id: z.string().min(1).describe("Short server identifier"),
         backup_uuid: z.string().min(1).describe("Backup UUID to restore"),
@@ -153,10 +155,19 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
           .boolean()
           .optional()
           .describe("Delete all existing files before restoring (default false)"),
+        confirm: z
+          .boolean()
+          .optional()
+          .describe("Required to be true when truncate=true to confirm wiping existing files"),
       },
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    withToolHandler(async ({ server_id, backup_uuid, truncate = false }) => {
+    withToolHandler(async ({ server_id, backup_uuid, truncate = false, confirm }) => {
+      if (truncate && confirm !== true) {
+        throw new Error(
+          "Refusing destructive restore with truncate=true without confirm=true.",
+        );
+      }
       await client.request(
         "POST",
         `/api/client/servers/${encodeURIComponent(server_id)}/backups/${encodeURIComponent(backup_uuid)}/restore`,
@@ -385,7 +396,8 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
   server.registerTool(
     "update_schedule",
     {
-      description: "Update an existing cron schedule's name, cron expression, or activation flags.",
+      description:
+        "Update an existing cron schedule's name, cron expression, or activation flags (preserves omitted flags).",
       inputSchema: {
         server_id: z.string().min(1).describe("Short server identifier"),
         schedule_id: z.number().int().min(1).describe("Numeric schedule ID"),
@@ -395,11 +407,11 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
         day_of_month: z.string().min(1).describe("Cron day of month field"),
         month: z.string().min(1).describe("Cron month field"),
         day_of_week: z.string().min(1).describe("Cron day of week field"),
-        is_active: z.boolean().optional().describe("Whether schedule is enabled (default true)"),
+        is_active: z.boolean().optional().describe("Whether schedule is enabled (preserves current if omitted)"),
         only_when_online: z
           .boolean()
           .optional()
-          .describe("Run only when server is online (default true)"),
+          .describe("Run only when server is online (preserves current if omitted)"),
       },
       annotations: { readOnlyHint: false, idempotentHint: true },
     },
@@ -412,9 +424,20 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
       day_of_month,
       month,
       day_of_week,
-      is_active = true,
-      only_when_online = true,
+      is_active,
+      only_when_online,
     }) => {
+      let resolvedActive = is_active;
+      let resolvedOnlineOnly = only_when_online;
+      if (resolvedActive === undefined || resolvedOnlineOnly === undefined) {
+        const current = await client.request<{ attributes: ScheduleAttributes }>(
+          "GET",
+          `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}`,
+        );
+        resolvedActive ??= current.attributes.is_active;
+        resolvedOnlineOnly ??= current.attributes.only_when_online;
+      }
+
       const res = await client.request<{ attributes: ScheduleAttributes }>(
         "POST",
         `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}`,
@@ -426,8 +449,8 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
             day_of_month,
             month,
             day_of_week,
-            is_active,
-            only_when_online,
+            is_active: resolvedActive,
+            only_when_online: resolvedOnlineOnly,
           },
         },
       );
@@ -438,15 +461,24 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
   server.registerTool(
     "update_schedule_task",
     {
-      description: "Update an existing action task inside a schedule.",
+      description: "Update an existing action task inside a schedule (preserves omitted flags).",
       inputSchema: {
         server_id: z.string().min(1).describe("Short server identifier"),
         schedule_id: z.number().int().min(1).describe("Numeric schedule ID"),
         task_id: z.number().int().min(1).describe("Numeric task ID"),
         action: z.enum(["command", "power", "backup"]).describe("Task action type"),
         payload: z.string().describe("Command, power signal, or ignored files for backup"),
-        time_offset: z.number().int().min(0).max(900).optional().describe("Delay in seconds (default 0)"),
-        continue_on_failure: z.boolean().optional().describe("Continue next tasks if this fails (default false)"),
+        time_offset: z
+          .number()
+          .int()
+          .min(0)
+          .max(900)
+          .optional()
+          .describe("Delay in seconds (preserves current if omitted)"),
+        continue_on_failure: z
+          .boolean()
+          .optional()
+          .describe("Continue next tasks if this fails (preserves current if omitted)"),
       },
       annotations: { readOnlyHint: false, idempotentHint: true },
     },
@@ -456,13 +488,34 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
       task_id,
       action,
       payload,
-      time_offset = 0,
-      continue_on_failure = false,
+      time_offset,
+      continue_on_failure,
     }) => {
+      let resolvedOffset = time_offset;
+      let resolvedContinue = continue_on_failure;
+      if (resolvedOffset === undefined || resolvedContinue === undefined) {
+        const current = await client.request<{ attributes: ScheduleAttributes }>(
+          "GET",
+          `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}`,
+        );
+        const existingTask = current.attributes.relationships?.tasks?.data.find(
+          (t) => t.attributes.id === task_id,
+        )?.attributes;
+        resolvedOffset ??= existingTask?.time_offset ?? 0;
+        resolvedContinue ??= existingTask?.continue_on_failure ?? false;
+      }
+
       const res = await client.request<{ attributes: ScheduleTaskAttributes }>(
         "POST",
         `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}/tasks/${task_id}`,
-        { body: { action, payload, time_offset, continue_on_failure } },
+        {
+          body: {
+            action,
+            payload,
+            time_offset: resolvedOffset,
+            continue_on_failure: resolvedContinue,
+          },
+        },
       );
       return res.attributes;
     }),

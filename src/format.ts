@@ -5,11 +5,11 @@ export interface McpToolResponse {
 }
 
 /**
- * Recursively removes undefined, null, and empty string fields from objects
- * so MCP responses stay concise and token-efficient.
+ * Recursively removes undefined and null fields from objects
+ * so MCP responses stay concise without dropping meaningful empty values like "" or 0.
  */
 export function compactValue(value: unknown): unknown {
-  if (value === null || value === undefined || value === "") {
+  if (value === null || value === undefined) {
     return undefined;
   }
   if (Array.isArray(value)) {
@@ -23,7 +23,7 @@ export function compactValue(value: unknown): unknown {
         out[k] = cleaned;
       }
     }
-    return Object.keys(out).length > 0 ? out : undefined;
+    return out;
   }
   return value;
 }
@@ -41,7 +41,7 @@ export function formatBytes(bytes: number): string {
   return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)} ${units[unitIdx]}`;
 }
 
-const ANSI_ESCAPE_RE = /\x1b(?:\[[0-9;?]*[A-Za-z]|\][^\x07]*(?:\x07|\x1b\\))/g;
+const ANSI_ESCAPE_RE = /\x1b(?:\[[0-9;?]*[A-Za-z]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g;
 
 export function stripAnsiCodes(text: string): string {
   return text.replace(ANSI_ESCAPE_RE, "");

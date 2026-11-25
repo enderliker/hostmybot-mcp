@@ -37,6 +37,56 @@ export interface RequestOptions {
   rawBody?: string | Uint8Array;
   contentType?: string;
   responseType?: "json" | "text";
+  maxBytes?: number;
+  timeoutMs?: number;
+}
+
+const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
+const DEFAULT_UPLOAD_TIMEOUT_MS = 120_000;
+
+function decodeWsMessage(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+  if (Buffer.isBuffer(raw)) return raw.toString("utf8");
+  if (Array.isArray(raw)) {
+    return Buffer.concat(
+      raw.map((chunk) => (Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer))),
+    ).toString("utf8");
+  }
+  if (raw instanceof ArrayBuffer) return Buffer.from(raw).toString("utf8");
+  if (ArrayBuffer.isView(raw)) {
+    return Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength).toString("utf8");
+  }
+  return String(raw);
+}
+
+async function readTextLimited(res: Response, maxBytes?: number): Promise<string> {
+  if (maxBytes === undefined || !res.body) {
+    return res.text();
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  const chunks: string[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      const remaining = maxBytes - totalBytes;
+      if (value.byteLength >= remaining) {
+        chunks.push(decoder.decode(value.subarray(0, remaining), { stream: true }));
+        await reader.cancel().catch(() => {});
+        break;
+      }
+      totalBytes += value.byteLength;
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+  } finally {
+    chunks.push(decoder.decode());
+  }
+  return chunks.join("");
 }
 
 export class PterodactylClient {
@@ -79,9 +129,15 @@ export class PterodactylClient {
 
     if (text) {
       try {
-        const json = JSON.parse(text) as { errors?: PterodactylApiErrorItem[]; message?: string };
+        const json = JSON.parse(text) as {
+          errors?: PterodactylApiErrorItem[];
+          message?: string;
+          error?: string;
+        };
         if (Array.isArray(json.errors) && json.errors.length > 0) {
           parsedErrors = json.errors;
+        } else if (json.error) {
+          return new PterodactylError(`HTTP ${res.status}: ${json.error}`, res.status);
         } else if (json.message) {
           return new PterodactylError(`HTTP ${res.status}: ${json.message}`, res.status);
         }
@@ -135,18 +191,24 @@ export class PterodactylClient {
       method,
       headers,
       body,
+      signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS),
     });
 
     if (!res.ok) {
       throw await this.parseError(res);
     }
 
-    if (res.status === 204 || res.headers.get("content-length") === "0") {
-      return undefined as T;
-    }
+    const isEmptyBody = res.status === 204 || res.headers.get("content-length") === "0";
 
     if (options.responseType === "text") {
-      return (await res.text()) as T;
+      if (isEmptyBody) {
+        return "" as T;
+      }
+      return (await readTextLimited(res, options.maxBytes)) as T;
+    }
+
+    if (isEmptyBody) {
+      return undefined as T;
     }
 
     const rawText = await res.text();
@@ -157,7 +219,11 @@ export class PterodactylClient {
     try {
       return JSON.parse(rawText) as T;
     } catch {
-      return rawText as T;
+      throw new PterodactylError(
+        `Invalid non-JSON response from API (HTTP ${res.status}): ${rawText.slice(0, 200)}`,
+        res.status,
+        "InvalidJsonResponse",
+      );
     }
   }
 
@@ -173,15 +239,16 @@ export class PterodactylClient {
     }
 
     const formData = new FormData();
-    const arrayBuffer = fileBytes.buffer.slice(
-      fileBytes.byteOffset,
-      fileBytes.byteOffset + fileBytes.byteLength,
-    ) as ArrayBuffer;
-    formData.append("files", new Blob([arrayBuffer]), fileName);
+    const byteView =
+      fileBytes.byteOffset === 0 && fileBytes.byteLength === fileBytes.buffer.byteLength
+        ? fileBytes
+        : fileBytes.subarray(0);
+    formData.append("files", new Blob([byteView as BlobPart]), fileName);
 
     const res = await this.fetchImpl(targetUrl.toString(), {
       method: "POST",
       body: formData,
+      signal: AbortSignal.timeout(DEFAULT_UPLOAD_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -232,12 +299,17 @@ export class PterodactylClient {
         };
 
         ws.on("open", () => {
-          ws.send(JSON.stringify({ event: "auth", args: [token] }));
+          try {
+            ws.send(JSON.stringify({ event: "auth", args: [token] }));
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            finish(new PterodactylError(`WebSocket send failed: ${message}`, 502, "WebSocketError"));
+          }
         });
 
         ws.on("message", (raw: unknown) => {
           try {
-            const text = typeof raw === "string" ? raw : String(raw);
+            const text = decodeWsMessage(raw);
             const msg = JSON.parse(text) as { event?: string; args?: unknown[] };
             if (msg.event === "auth success") {
               ws.send(JSON.stringify({ event: "send logs", args: [null] }));
@@ -252,11 +324,20 @@ export class PterodactylClient {
                   if (line.length > 0) collected.push(line);
                 }
               }
+              if (collected.length > maxLines * 2) {
+                collected.splice(0, collected.length - maxLines);
+              }
               bumpIdle();
+            } else if (msg.event === "daemon error") {
+              const detail = Array.isArray(msg.args) ? msg.args.join(" ") : "Daemon error";
+              finish(new PterodactylError(`Wings daemon error: ${detail}`, 502, "DaemonError"));
             } else if (msg.event === "jwt error" || msg.event === "token expired") {
               finish(new PterodactylError(`WebSocket auth failed: ${msg.event}`, 401, msg.event));
             }
-          } catch {
+          } catch (err) {
+            if (err instanceof PterodactylError) {
+              finish(err);
+            }
             // Ignore malformed or non-JSON frames from Wings
           }
         });

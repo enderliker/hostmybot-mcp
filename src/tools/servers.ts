@@ -131,7 +131,7 @@ export function registerServerTools(server: McpServer, client: PterodactylClient
     },
     withToolHandler(async ({ page, per_page }) => {
       const res = await client.request<PterodactylListResponse<ServerAttributes>>("GET", "/api/client", {
-        query: { page, per_page },
+        query: { page, per_page, include: "egg" },
       });
       return {
         servers: res.data.map((item) => summarizeServer(item.attributes)),
@@ -158,6 +158,9 @@ export function registerServerTools(server: McpServer, client: PterodactylClient
       const res = await client.request<{ attributes: ServerAttributes }>(
         "GET",
         `/api/client/servers/${encodeURIComponent(server_id)}`,
+        {
+          query: { include: include_variables ? "egg,variables" : "egg" },
+        },
       );
       const attr = res.attributes;
       return {
@@ -196,17 +199,19 @@ export function registerServerTools(server: McpServer, client: PterodactylClient
         `/api/client/servers/${encodeURIComponent(server_id)}/resources`,
       );
       const { current_state, is_suspended, resources } = res.attributes;
+      const cpu = typeof resources.cpu_absolute === "number" ? resources.cpu_absolute : 0;
+      const uptimeMs = typeof resources.uptime === "number" ? resources.uptime : 0;
       return {
         state: current_state,
         is_suspended,
-        cpu_percent: Number(resources.cpu_absolute.toFixed(2)),
+        cpu_percent: Number(cpu.toFixed(2)),
         memory: formatBytes(resources.memory_bytes),
         memory_bytes: resources.memory_bytes,
         disk: formatBytes(resources.disk_bytes),
         disk_bytes: resources.disk_bytes,
         network_rx: formatBytes(resources.network_rx_bytes),
         network_tx: formatBytes(resources.network_tx_bytes),
-        uptime_seconds: Math.floor(resources.uptime / 1000),
+        uptime_seconds: Math.floor(uptimeMs / 1000),
       };
     }),
   );
