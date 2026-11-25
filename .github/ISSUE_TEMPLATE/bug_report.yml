@@ -1,0 +1,32 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in hostmybot-mcp
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for reporting an issue! Never include your real `HOSTMYBOT_API_KEY` (`ptlc_...`) or server IP/IDs.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the bug and the MCP tool involved.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Configure hostmybot-mcp in ...
+        2. Call tool `...` with arguments `...`
+        3. Observed error: ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Node.js version (e.g. v22.x), OS, MCP client (Antigravity / Claude Code / Codex)"
+    validations:
+      required: true

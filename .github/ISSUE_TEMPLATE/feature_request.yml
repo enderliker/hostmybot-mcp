@@ -1,0 +1,19 @@
+name: Feature Request
+description: Suggest a new tool, optimization, or improvement for hostmybot-mcp
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow or Pterodactyl/HostMyBot endpoint would this support?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Suggested tool name, parameters, or response optimization.
+    validations:
+      required: true
