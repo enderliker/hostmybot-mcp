@@ -4,6 +4,14 @@
   "description": "MCP server for HostMyBot / Pterodactyl Client API (servers, files, power, console, backups, schedules, startup, subusers)",
   "license": "MIT",
   "author": "enderliker",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enderliker/hostmybot-mcp.git"
+  },
+  "homepage": "https://github.com/enderliker/hostmybot-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/enderliker/hostmybot-mcp/issues"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",

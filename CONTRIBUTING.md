@@ -5,7 +5,7 @@ Thank you for contributing! All code, tests, documentation, and commit messages 
 ## Development Setup
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/enderliker/hostmybot-mcp.git
 cd hostmybot-mcp
 npm install
 ```
