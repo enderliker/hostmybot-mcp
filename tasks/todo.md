@@ -2,7 +2,7 @@
 
 ## Task 1: Scaffold TypeScript project, MCP server entrypoint, and config loader
 
-**Description:** Initialize `/home/ender/projects/hostmybot-mcp` with `package.json`, `tsconfig.json`, `vitest.config.ts`, and a config loader (`src/config.ts`) that reads `HOSTMYBOT_API_KEY` and `HOSTMYBOT_URL` (default `https://client.hostmybot.net`) from environment variables or CLI flags (`--api-key`, `--url`), plus the `McpServer` `stdio` entrypoint (`src/index.ts`).
+**Description:** Initialize `hostmybot-mcp` with `package.json`, `tsconfig.json`, `vitest.config.ts`, and a config loader (`src/config.ts`) that reads `HOSTMYBOT_API_KEY` and `HOSTMYBOT_URL` (default `https://client.hostmybot.net`) from environment variables or CLI flags (`--api-key`, `--url`), plus the `McpServer` `stdio` entrypoint (`src/index.ts`).
 
 **Acceptance criteria:**
 - [x] `package.json` includes `@modelcontextprotocol/sdk`, `zod`, `typescript`, `vitest`, `@types/node`, and `bin` entry (`hostmybot-mcp`)

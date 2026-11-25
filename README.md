@@ -14,7 +14,8 @@ Model Context Protocol (MCP) server for the **HostMyBot / Pterodactyl Client API
 ### 1. Build from source
 
 ```bash
-cd /home/ender/projects/hostmybot-mcp
+git clone https://github.com/enderliker/hostmybot-mcp.git
+cd hostmybot-mcp
 npm install
 npm run build
 ```
@@ -30,7 +31,7 @@ Requires **Node.js >= 18** and a Pterodactyl Client API key (`ptlc_...`) generat
   "mcpServers": {
     "hostmybot": {
       "command": "node",
-      "args": ["/home/ender/projects/hostmybot-mcp/dist/index.js"],
+      "args": ["/path/to/hostmybot-mcp/dist/index.js"],
       "env": {
         "HOSTMYBOT_API_KEY": "ptlc_YOUR_CLIENT_API_KEY",
         "HOSTMYBOT_URL": "https://client.hostmybot.net"
@@ -48,7 +49,7 @@ Using the CLI:
 claude mcp add hostmybot \
   -e HOSTMYBOT_API_KEY=ptlc_YOUR_CLIENT_API_KEY \
   -e HOSTMYBOT_URL=https://client.hostmybot.net \
-  -- node /home/ender/projects/hostmybot-mcp/dist/index.js
+  -- node /path/to/hostmybot-mcp/dist/index.js
 ```
 
 Or in `.mcp.json` at your project root:
@@ -58,7 +59,7 @@ Or in `.mcp.json` at your project root:
   "mcpServers": {
     "hostmybot": {
       "command": "node",
-      "args": ["/home/ender/projects/hostmybot-mcp/dist/index.js"],
+      "args": ["/path/to/hostmybot-mcp/dist/index.js"],
       "env": {
         "HOSTMYBOT_API_KEY": "ptlc_YOUR_CLIENT_API_KEY",
         "HOSTMYBOT_URL": "https://client.hostmybot.net"
@@ -73,7 +74,7 @@ Or in `.mcp.json` at your project root:
 ```toml
 [mcp_servers.hostmybot]
 command = "node"
-args = ["/home/ender/projects/hostmybot-mcp/dist/index.js"]
+args = ["/path/to/hostmybot-mcp/dist/index.js"]
 
 [mcp_servers.hostmybot.env]
 HOSTMYBOT_API_KEY = "ptlc_YOUR_CLIENT_API_KEY"
@@ -83,7 +84,7 @@ HOSTMYBOT_URL = "https://client.hostmybot.net"
 #### CLI Flags (Alternative to Env Vars)
 
 ```bash
-node /home/ender/projects/hostmybot-mcp/dist/index.js \
+node /path/to/hostmybot-mcp/dist/index.js \
   --api-key ptlc_YOUR_CLIENT_API_KEY \
   --url https://client.hostmybot.net
 ```
