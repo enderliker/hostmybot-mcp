@@ -1,0 +1,31 @@
+{
+  "name": "hostmybot-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for HostMyBot / Pterodactyl Client API (servers, files, power, console, backups, schedules, startup, subusers)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "hostmybot-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "test": "vitest run",
+    "start": "node dist/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}
