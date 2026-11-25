@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-11-25
+
+### Fixed
+- Handle 0-byte and `204` responses safely in `read_file_contents` and stream responses up to `maxBytes` to avoid unbounded buffering.
+- Fix quadratic backtracking (ReDoS) and over-greedy OSC matching in `stripAnsiCodes`.
+- Pass `?include=egg` and `?include=egg,variables` in `list_servers` and `get_server`.
+- Preserve meaningful empty strings (`""`) and `{}` values in `compactValue`.
+- Add default `AbortSignal.timeout` to HTTP calls and uploads, `InvalidJsonResponse` errors on non-JSON `200` replies, Wings `{ error }` error parsing, and bounded WebSocket log buffering with `"daemon error"` handling.
+- Enforce `confirm: true` when `restore_backup` uses `truncate: true`, preserve omitted flags in `update_schedule` / `update_schedule_task`, validate `chmod_files` octal modes, `remote_filename` traversal, and `http:`/`https:` URLs in `pull_remote_file`.
+- Reject query/fragment/userinfo in `HOSTMYBOT_URL` and flag-like values in CLI parsing.
+- Include `tests/` in `npm run typecheck` and align `engines.node` to `>=20.0.0`.
+
 ## [1.0.0] - 2026-11-25
 
 ### Added

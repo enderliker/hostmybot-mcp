@@ -1,6 +1,6 @@
 {
   "name": "hostmybot-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for HostMyBot / Pterodactyl Client API (servers, files, power, console, backups, schedules, startup, subusers)",
   "license": "MIT",
   "author": "enderliker",
