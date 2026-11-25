@@ -20,7 +20,7 @@ npm install
 npm run build
 ```
 
-Requires **Node.js >= 18** and a Pterodactyl Client API key (`ptlc_...`) generated from `https://client.hostmybot.net/account/api`.
+Requires **Node.js >= 20** and a Pterodactyl Client API key (`ptlc_...`) generated from `https://client.hostmybot.net/account/api`.
 
 ### 2. Configure in your MCP Agent
 

@@ -239,4 +239,52 @@ describe("server tools", () => {
       "server:power.start",
     );
   });
+
+  it("get_server sends include=egg,variables when include_variables=true", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          attributes: {
+            identifier: "00000000",
+            uuid: "uuid-1",
+            name: "example-bot",
+            node: "Node-1",
+            server_owner: true,
+            status: "running",
+            is_suspended: false,
+            is_installing: false,
+            limits: { memory: 256, swap: 0, disk: 512, io: 500, cpu: 50 },
+            relationships: {
+              egg: { attributes: { uuid: "egg-1", name: "node.js" } },
+              variables: {
+                data: [
+                  {
+                    attributes: {
+                      name: "Main",
+                      env_variable: "MAIN_FILE",
+                      default_value: "index.js",
+                      server_value: "",
+                      is_editable: true,
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    const { mcpClient } = await setupClient(fetchMock);
+    const res = await mcpClient.callTool({
+      name: "get_server",
+      arguments: { server_id: "00000000", include_variables: true },
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://client.hostmybot.net/api/client/servers/00000000?include=egg%2Cvariables",
+    );
+    const parsed = JSON.parse((res.content as Array<{ text: string }>)[0].text);
+    expect(parsed.egg).toBe("node.js");
+    expect(parsed.variables[0]).toMatchObject({ key: "MAIN_FILE", value: "" });
+  });
 });

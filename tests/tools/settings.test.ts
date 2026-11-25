@@ -152,4 +152,24 @@ describe("settings tools", () => {
       deleted_allocation_id: 102,
     });
   });
+
+  it("supports rename_server and set_docker_image", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const { mcpClient } = await setupClient(fetchMock);
+
+    const renamed = await mcpClient.callTool({
+      name: "rename_server",
+      arguments: { server_id: "00000000", name: "new-name", description: "desc" },
+    });
+    expect(JSON.parse((renamed.content as Array<{ text: string }>)[0].text).name).toBe("new-name");
+
+    const img = await mcpClient.callTool({
+      name: "set_docker_image",
+      arguments: { server_id: "00000000", docker_image: "ghcr.io/parkervcp/yolks:nodejs_22" },
+    });
+    expect(JSON.parse((img.content as Array<{ text: string }>)[0].text).ok).toBe(true);
+  });
 });

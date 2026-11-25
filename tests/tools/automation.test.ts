@@ -145,21 +145,39 @@ describe("automation tools (backups & schedules)", () => {
         id: 8,
         name: "Updated Cron",
         cron: { minute: "5", hour: "*", day_of_month: "*", month: "*", day_of_week: "*" },
-        is_active: true,
+        is_active: false,
         is_processing: false,
-        only_when_online: false,
+        only_when_online: true,
         last_run_at: null,
         next_run_at: null,
+        relationships: {
+          tasks: {
+            data: [
+              {
+                attributes: {
+                  id: 3,
+                  sequence_id: 1,
+                  action: "command",
+                  payload: "old",
+                  time_offset: 10,
+                  continue_on_failure: true,
+                },
+              },
+            ],
+          },
+        },
       },
     };
     const task = {
-      attributes: { id: 3, sequence_id: 1, action: "command", payload: "save-all", time_offset: 5, continue_on_failure: false },
+      attributes: { id: 3, sequence_id: 1, action: "command", payload: "save-all", time_offset: 5, continue_on_failure: true },
     };
 
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(backup), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(backup), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(schedule), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(schedule), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(schedule), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(schedule), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(task), { status: 200 }))
@@ -198,6 +216,7 @@ describe("automation tools (backups & schedules)", () => {
       },
     });
     expect(JSON.parse((updSched.content as Array<{ text: string }>)[0].text).name).toBe("Updated Cron");
+    expect(JSON.parse(fetchMock.mock.calls[4][1]?.body as string).is_active).toBe(false);
 
     const updTask = await mcpClient.callTool({
       name: "update_schedule_task",
@@ -211,6 +230,7 @@ describe("automation tools (backups & schedules)", () => {
       },
     });
     expect(JSON.parse((updTask.content as Array<{ text: string }>)[0].text).payload).toBe("save-all");
+    expect(JSON.parse(fetchMock.mock.calls[6][1]?.body as string).continue_on_failure).toBe(true);
 
     const delTask = await mcpClient.callTool({
       name: "delete_schedule_task",
@@ -220,5 +240,37 @@ describe("automation tools (backups & schedules)", () => {
       ok: true,
       deleted_task_id: 3,
     });
+  });
+
+  it("restore_backup guards truncate=true with confirm=true and supports delete_backup/delete_schedule", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const { mcpClient } = await setupClient(fetchMock);
+
+    const blocked = await mcpClient.callTool({
+      name: "restore_backup",
+      arguments: { server_id: "00000000", backup_uuid: "b1", truncate: true },
+    });
+    expect(blocked.isError).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const ok = await mcpClient.callTool({
+      name: "restore_backup",
+      arguments: { server_id: "00000000", backup_uuid: "b1", truncate: true, confirm: true },
+    });
+    expect(ok.isError).not.toBe(true);
+
+    await mcpClient.callTool({
+      name: "delete_backup",
+      arguments: { server_id: "00000000", backup_uuid: "b1" },
+    });
+    await mcpClient.callTool({
+      name: "delete_schedule",
+      arguments: { server_id: "00000000", schedule_id: 8 },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

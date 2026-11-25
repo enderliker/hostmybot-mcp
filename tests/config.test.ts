@@ -39,4 +39,19 @@ describe("loadConfig", () => {
     expect(isHelpRequested(["-h"])).toBe(true);
     expect(isHelpRequested(["--api-key", "abc"])).toBe(false);
   });
+
+  it("rejects query strings, fragments, or embedded credentials in HOSTMYBOT_URL", () => {
+    expect(() =>
+      loadConfig({ HOSTMYBOT_API_KEY: "ptlc_ok", HOSTMYBOT_URL: "https://panel.example.com?foo=1" }, []),
+    ).toThrow(/query/i);
+    expect(() =>
+      loadConfig({ HOSTMYBOT_API_KEY: "ptlc_ok", HOSTMYBOT_URL: "https://user:pass@panel.example.com" }, []),
+    ).toThrow(/credentials/i);
+  });
+
+  it("does not treat a subsequent --flag as the value of --api-key", () => {
+    expect(() => loadConfig({}, ["--api-key", "--url", "https://panel.example.com"])).toThrow(
+      /HOSTMYBOT_API_KEY/,
+    );
+  });
 });

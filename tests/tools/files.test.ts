@@ -53,7 +53,7 @@ describe("file tools", () => {
     });
     const text = (res.content as Array<{ text: string }>)[0].text;
     expect(text).toContain("A".repeat(100));
-    expect(text).toContain("[Truncated at 100 of 250 chars]");
+    expect(text).toContain("[Truncated at 100 chars (file had 250+ chars)]");
   });
 
   it("write_file posts raw body to files/write", async () => {
@@ -178,5 +178,73 @@ describe("file tools", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       "https://client.hostmybot.net/api/client/servers/00000000/files/pull",
     );
+  });
+
+  it("handles empty 0-byte read_file_contents and validates chmod, pull url, and upload filename", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 200, headers: { "content-length": "0" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const { mcpClient } = await setupClient(fetchMock);
+
+    const emptyRead = await mcpClient.callTool({
+      name: "read_file_contents",
+      arguments: { server_id: "00000000", file: "/.gitkeep" },
+    });
+    expect(emptyRead.isError).not.toBe(true);
+    expect((emptyRead.content as Array<{ text: string }>)[0].text).toBe("");
+
+    const badChmod = await mcpClient.callTool({
+      name: "chmod_files",
+      arguments: { server_id: "00000000", files: [{ file: "a", mode: "rwx" }] },
+    });
+    expect(badChmod.isError).toBe(true);
+
+    const badPull = await mcpClient.callTool({
+      name: "pull_remote_file",
+      arguments: { server_id: "00000000", url: "file:///etc/passwd" },
+    });
+    expect(badPull.isError).toBe(true);
+
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), "hostmybot-badname-"));
+    const localFile = path.join(tmpDir, "ok.txt");
+    await writeFile(localFile, "ok", "utf8");
+    try {
+      const badUploadName = await mcpClient.callTool({
+        name: "upload_file",
+        arguments: { server_id: "00000000", local_path: localFile, remote_filename: "../evil.txt" },
+      });
+      expect(badUploadName.isError).toBe(true);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+
+    await mcpClient.callTool({
+      name: "create_folder",
+      arguments: { server_id: "00000000", name: "logs" },
+    });
+    await mcpClient.callTool({
+      name: "rename_files",
+      arguments: { server_id: "00000000", files: [{ from: "a.txt", to: "b.txt" }] },
+    });
+    await mcpClient.callTool({
+      name: "copy_file",
+      arguments: { server_id: "00000000", location: "/b.txt" },
+    });
+    await mcpClient.callTool({
+      name: "decompress_file",
+      arguments: { server_id: "00000000", file: "archive.tar.gz" },
+    });
+    await mcpClient.callTool({
+      name: "chmod_files",
+      arguments: { server_id: "00000000", files: [{ file: "start.sh", mode: "755" }] },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 });
