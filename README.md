@@ -23,7 +23,7 @@ Requires **Node.js >= 18** and a Pterodactyl Client API key (`ptlc_...`) generat
 
 ### 2. Configure in your MCP Agent
 
-#### Antigravity (`~/.gemini/antigravity/mcp_config.json`)
+#### Antigravity (`~/.gemini/config/mcp_config.json`)
 
 ```json
 {
