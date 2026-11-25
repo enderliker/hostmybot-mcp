@@ -41,6 +41,34 @@ export function formatBytes(bytes: number): string {
   return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)} ${units[unitIdx]}`;
 }
 
+const ANSI_ESCAPE_RE = /\x1b(?:\[[0-9;?]*[A-Za-z]|\][^\x07]*(?:\x07|\x1b\\))/g;
+
+export function stripAnsiCodes(text: string): string {
+  return text.replace(ANSI_ESCAPE_RE, "");
+}
+
+export interface ActivityLogAttributes {
+  id: string;
+  event: string;
+  is_api: boolean;
+  ip?: string;
+  description?: string | null;
+  properties?: Record<string, unknown>;
+  timestamp: string;
+}
+
+export function summarizeActivity(item: ActivityLogAttributes) {
+  return {
+    id: item.id,
+    event: item.event,
+    is_api: item.is_api,
+    ip: item.ip,
+    description: item.description,
+    properties: item.properties,
+    timestamp: item.timestamp,
+  };
+}
+
 export function toolSuccess(data: unknown): McpToolResponse {
   const text =
     typeof data === "string"

@@ -176,4 +176,81 @@ export function registerSettingsTools(server: McpServer, client: PterodactylClie
       };
     }),
   );
+
+  server.registerTool(
+    "create_allocation",
+    {
+      description: "Auto-assign a new network allocation (IP/port) to a server within its allocation limit.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    withToolHandler(async ({ server_id }) => {
+      const res = await client.request<{ attributes: AllocationAttributes }>(
+        "POST",
+        `/api/client/servers/${encodeURIComponent(server_id)}/network/allocations`,
+      );
+      return res.attributes;
+    }),
+  );
+
+  server.registerTool(
+    "update_allocation_notes",
+    {
+      description: "Update the notes label on a server network allocation.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        allocation_id: z.number().int().min(1).describe("Numeric allocation ID"),
+        notes: z.string().describe("New notes text (pass empty string to clear)"),
+      },
+      annotations: { readOnlyHint: false, idempotentHint: true },
+    },
+    withToolHandler(async ({ server_id, allocation_id, notes }) => {
+      const res = await client.request<{ attributes: AllocationAttributes }>(
+        "POST",
+        `/api/client/servers/${encodeURIComponent(server_id)}/network/allocations/${allocation_id}`,
+        { body: { notes } },
+      );
+      return res.attributes;
+    }),
+  );
+
+  server.registerTool(
+    "set_primary_allocation",
+    {
+      description: "Set a network allocation as the primary/default server address.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        allocation_id: z.number().int().min(1).describe("Numeric allocation ID"),
+      },
+      annotations: { readOnlyHint: false, idempotentHint: true },
+    },
+    withToolHandler(async ({ server_id, allocation_id }) => {
+      const res = await client.request<{ attributes: AllocationAttributes }>(
+        "POST",
+        `/api/client/servers/${encodeURIComponent(server_id)}/network/allocations/${allocation_id}/primary`,
+      );
+      return res.attributes;
+    }),
+  );
+
+  server.registerTool(
+    "delete_allocation",
+    {
+      description: "DESTRUCTIVE: Unassign and delete a non-primary network allocation from a server.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        allocation_id: z.number().int().min(1).describe("Numeric allocation ID"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    withToolHandler(async ({ server_id, allocation_id }) => {
+      await client.request(
+        "DELETE",
+        `/api/client/servers/${encodeURIComponent(server_id)}/network/allocations/${allocation_id}`,
+      );
+      return { ok: true, deleted_allocation_id: allocation_id };
+    }),
+  );
 }

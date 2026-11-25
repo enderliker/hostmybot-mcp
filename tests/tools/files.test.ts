@@ -154,4 +154,29 @@ describe("file tools", () => {
       "https://dl.example.com/file",
     );
   });
+
+  it("pull_remote_file posts url and destination directory", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    const { mcpClient } = await setupClient(fetchMock);
+
+    const res = await mcpClient.callTool({
+      name: "pull_remote_file",
+      arguments: {
+        server_id: "00000000",
+        url: "https://example.com/plugin.jar",
+        directory: "/plugins",
+        filename: "plugin.jar",
+      },
+    });
+    expect(JSON.parse((res.content as Array<{ text: string }>)[0].text)).toEqual({
+      ok: true,
+      server_id: "00000000",
+      url: "https://example.com/plugin.jar",
+      directory: "/plugins",
+      filename: "plugin.jar",
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://client.hostmybot.net/api/client/servers/00000000/files/pull",
+    );
+  });
 });

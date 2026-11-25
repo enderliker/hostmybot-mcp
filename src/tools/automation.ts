@@ -324,4 +324,167 @@ export function registerAutomationTools(server: McpServer, client: PterodactylCl
       return { ok: true, deleted_schedule_id: schedule_id };
     }),
   );
+
+  server.registerTool(
+    "get_backup",
+    {
+      description: "Get metadata for a single server backup by UUID.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        backup_uuid: z.string().min(1).describe("Backup UUID"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    withToolHandler(async ({ server_id, backup_uuid }) => {
+      const res = await client.request<{ attributes: BackupAttributes }>(
+        "GET",
+        `/api/client/servers/${encodeURIComponent(server_id)}/backups/${encodeURIComponent(backup_uuid)}`,
+      );
+      return summarizeBackup(res.attributes);
+    }),
+  );
+
+  server.registerTool(
+    "toggle_backup_lock",
+    {
+      description: "Toggle the lock status of a backup (locked backups cannot be deleted until unlocked).",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        backup_uuid: z.string().min(1).describe("Backup UUID"),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    withToolHandler(async ({ server_id, backup_uuid }) => {
+      const res = await client.request<{ attributes: BackupAttributes }>(
+        "POST",
+        `/api/client/servers/${encodeURIComponent(server_id)}/backups/${encodeURIComponent(backup_uuid)}/lock`,
+      );
+      return summarizeBackup(res.attributes);
+    }),
+  );
+
+  server.registerTool(
+    "get_schedule",
+    {
+      description: "Get details and tasks for a single schedule ID.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        schedule_id: z.number().int().min(1).describe("Numeric schedule ID"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    withToolHandler(async ({ server_id, schedule_id }) => {
+      const res = await client.request<{ attributes: ScheduleAttributes }>(
+        "GET",
+        `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}`,
+      );
+      return summarizeSchedule(res.attributes);
+    }),
+  );
+
+  server.registerTool(
+    "update_schedule",
+    {
+      description: "Update an existing cron schedule's name, cron expression, or activation flags.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        schedule_id: z.number().int().min(1).describe("Numeric schedule ID"),
+        name: z.string().min(1).describe("Schedule name"),
+        minute: z.string().min(1).describe("Cron minute field"),
+        hour: z.string().min(1).describe("Cron hour field"),
+        day_of_month: z.string().min(1).describe("Cron day of month field"),
+        month: z.string().min(1).describe("Cron month field"),
+        day_of_week: z.string().min(1).describe("Cron day of week field"),
+        is_active: z.boolean().optional().describe("Whether schedule is enabled (default true)"),
+        only_when_online: z
+          .boolean()
+          .optional()
+          .describe("Run only when server is online (default true)"),
+      },
+      annotations: { readOnlyHint: false, idempotentHint: true },
+    },
+    withToolHandler(async ({
+      server_id,
+      schedule_id,
+      name,
+      minute,
+      hour,
+      day_of_month,
+      month,
+      day_of_week,
+      is_active = true,
+      only_when_online = true,
+    }) => {
+      const res = await client.request<{ attributes: ScheduleAttributes }>(
+        "POST",
+        `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}`,
+        {
+          body: {
+            name,
+            minute,
+            hour,
+            day_of_month,
+            month,
+            day_of_week,
+            is_active,
+            only_when_online,
+          },
+        },
+      );
+      return summarizeSchedule(res.attributes);
+    }),
+  );
+
+  server.registerTool(
+    "update_schedule_task",
+    {
+      description: "Update an existing action task inside a schedule.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        schedule_id: z.number().int().min(1).describe("Numeric schedule ID"),
+        task_id: z.number().int().min(1).describe("Numeric task ID"),
+        action: z.enum(["command", "power", "backup"]).describe("Task action type"),
+        payload: z.string().describe("Command, power signal, or ignored files for backup"),
+        time_offset: z.number().int().min(0).max(900).optional().describe("Delay in seconds (default 0)"),
+        continue_on_failure: z.boolean().optional().describe("Continue next tasks if this fails (default false)"),
+      },
+      annotations: { readOnlyHint: false, idempotentHint: true },
+    },
+    withToolHandler(async ({
+      server_id,
+      schedule_id,
+      task_id,
+      action,
+      payload,
+      time_offset = 0,
+      continue_on_failure = false,
+    }) => {
+      const res = await client.request<{ attributes: ScheduleTaskAttributes }>(
+        "POST",
+        `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}/tasks/${task_id}`,
+        { body: { action, payload, time_offset, continue_on_failure } },
+      );
+      return res.attributes;
+    }),
+  );
+
+  server.registerTool(
+    "delete_schedule_task",
+    {
+      description: "Delete a specific task from a schedule.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        schedule_id: z.number().int().min(1).describe("Numeric schedule ID"),
+        task_id: z.number().int().min(1).describe("Numeric task ID"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    withToolHandler(async ({ server_id, schedule_id, task_id }) => {
+      await client.request(
+        "DELETE",
+        `/api/client/servers/${encodeURIComponent(server_id)}/schedules/${schedule_id}/tasks/${task_id}`,
+      );
+      return { ok: true, deleted_task_id: task_id };
+    }),
+  );
 }

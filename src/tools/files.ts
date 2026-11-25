@@ -335,4 +335,32 @@ export function registerFileTools(server: McpServer, client: PterodactylClient):
       return { ok: true, root, updated: files.length };
     }),
   );
+
+  server.registerTool(
+    "pull_remote_file",
+    {
+      description: "Download a file directly from a remote HTTP/HTTPS URL into a server directory.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        url: z.string().url().describe("Remote HTTP/HTTPS URL to pull"),
+        directory: z.string().optional().describe("Destination directory inside container (default '/')"),
+        filename: z.string().optional().describe("Optional filename override on the server"),
+        use_header: z
+          .boolean()
+          .optional()
+          .describe("Use Content-Disposition filename header when available"),
+        foreground: z
+          .boolean()
+          .optional()
+          .describe("Wait for the download to finish before returning (default true)"),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    withToolHandler(async ({ server_id, url, directory = "/", filename, use_header, foreground = true }) => {
+      await client.request("POST", `/api/client/servers/${encodeURIComponent(server_id)}/files/pull`, {
+        body: { url, directory, filename, use_header, foreground },
+      });
+      return { ok: true, server_id, url, directory, filename };
+    }),
+  );
 }

@@ -1,4 +1,17 @@
+import WebSocket from "ws";
 import type { HostMyBotConfig } from "./config.js";
+import { stripAnsiCodes } from "./format.js";
+
+export interface ConsoleSocketLike {
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  send(data: string): void;
+  close(): void;
+}
+
+export type WebSocketFactory = (url: string, origin: string) => ConsoleSocketLike;
+
+const defaultWebSocketFactory: WebSocketFactory = (url, origin) =>
+  new WebSocket(url, { headers: { Origin: origin } });
 
 export interface PterodactylApiErrorItem {
   code?: string;
@@ -30,11 +43,17 @@ export class PterodactylClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly wsFactory: WebSocketFactory;
 
-  constructor(config: HostMyBotConfig, fetchImpl: typeof fetch = fetch) {
+  constructor(
+    config: HostMyBotConfig,
+    fetchImpl: typeof fetch = fetch,
+    wsFactory: WebSocketFactory = defaultWebSocketFactory,
+  ) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl;
     this.fetchImpl = fetchImpl;
+    this.wsFactory = wsFactory;
   }
 
   private buildUrl(
@@ -168,5 +187,100 @@ export class PterodactylClient {
     if (!res.ok) {
       throw await this.parseError(res);
     }
+  }
+
+  async getWebsocketCredentials(serverId: string): Promise<{ token: string; socket: string }> {
+    const res = await this.request<{ data: { token: string; socket: string } }>(
+      "GET",
+      `/api/client/servers/${encodeURIComponent(serverId)}/websocket`,
+    );
+    return res.data;
+  }
+
+  async readConsoleLogs(
+    serverId: string,
+    options: { maxLines?: number; timeoutMs?: number; stripAnsi?: boolean; idleMs?: number } = {},
+  ): Promise<{ status?: string; line_count: number; lines: string[] }> {
+    const maxLines = options.maxLines ?? 100;
+    const timeoutMs = options.timeoutMs ?? 2500;
+    const idleMs = options.idleMs ?? 450;
+    const shouldStripAnsi = options.stripAnsi ?? true;
+
+    const { token, socket } = await this.getWebsocketCredentials(serverId);
+    const ws = this.wsFactory(socket, this.baseUrl);
+    const collected: string[] = [];
+    let latestStatus: string | undefined;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        let idleTimer: ReturnType<typeof setTimeout> | undefined;
+        const maxTimer = setTimeout(() => finish(), timeoutMs);
+
+        const finish = (err?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(maxTimer);
+          if (idleTimer) clearTimeout(idleTimer);
+          if (err) reject(err);
+          else resolve();
+        };
+
+        const bumpIdle = () => {
+          if (idleTimer) clearTimeout(idleTimer);
+          idleTimer = setTimeout(() => finish(), idleMs);
+        };
+
+        ws.on("open", () => {
+          ws.send(JSON.stringify({ event: "auth", args: [token] }));
+        });
+
+        ws.on("message", (raw: unknown) => {
+          try {
+            const text = typeof raw === "string" ? raw : String(raw);
+            const msg = JSON.parse(text) as { event?: string; args?: unknown[] };
+            if (msg.event === "auth success") {
+              ws.send(JSON.stringify({ event: "send logs", args: [null] }));
+              bumpIdle();
+            } else if (msg.event === "status" && Array.isArray(msg.args) && msg.args[0]) {
+              latestStatus = String(msg.args[0]);
+            } else if (msg.event === "console output" && Array.isArray(msg.args)) {
+              for (const chunk of msg.args) {
+                const rawLine = String(chunk);
+                const normalized = shouldStripAnsi ? stripAnsiCodes(rawLine) : rawLine;
+                for (const line of normalized.split(/\r?\n/)) {
+                  if (line.length > 0) collected.push(line);
+                }
+              }
+              bumpIdle();
+            } else if (msg.event === "jwt error" || msg.event === "token expired") {
+              finish(new PterodactylError(`WebSocket auth failed: ${msg.event}`, 401, msg.event));
+            }
+          } catch {
+            // Ignore malformed or non-JSON frames from Wings
+          }
+        });
+
+        ws.on("error", (err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          finish(new PterodactylError(`WebSocket error: ${message}`, 502, "WebSocketError"));
+        });
+
+        ws.on("close", () => finish());
+      });
+    } finally {
+      try {
+        ws.close();
+      } catch {
+        // Ignore close errors if socket never opened
+      }
+    }
+
+    const lines = collected.slice(-maxLines);
+    return {
+      status: latestStatus,
+      line_count: lines.length,
+      lines,
+    };
   }
 }

@@ -7,6 +7,7 @@ import { PterodactylClient } from "./client.js";
 import { isHelpRequested, loadConfig } from "./config.js";
 import { registerAccountTools } from "./tools/account.js";
 import { registerAutomationTools } from "./tools/automation.js";
+import { registerDatabaseTools } from "./tools/databases.js";
 import { registerFileTools } from "./tools/files.js";
 import { registerServerTools } from "./tools/servers.js";
 import { registerSettingsTools } from "./tools/settings.js";
@@ -33,6 +34,7 @@ export function createHostMyBotServer(client: PterodactylClient): McpServer {
   registerFileTools(server, client);
   registerSettingsTools(server, client);
   registerAutomationTools(server, client);
+  registerDatabaseTools(server, client);
   registerAccountTools(server, client);
 
   return server;

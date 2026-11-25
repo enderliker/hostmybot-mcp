@@ -127,4 +127,98 @@ describe("automation tools (backups & schedules)", () => {
       triggered: true,
     });
   });
+
+  it("supports get_backup, toggle_backup_lock, and schedule/task CRUD", async () => {
+    const backup = {
+      attributes: {
+        uuid: "bkp-9",
+        name: "manual",
+        is_successful: true,
+        is_locked: true,
+        bytes: 2048,
+        created_at: "2026-01-01",
+        completed_at: "2026-01-01",
+      },
+    };
+    const schedule = {
+      attributes: {
+        id: 8,
+        name: "Updated Cron",
+        cron: { minute: "5", hour: "*", day_of_month: "*", month: "*", day_of_week: "*" },
+        is_active: true,
+        is_processing: false,
+        only_when_online: false,
+        last_run_at: null,
+        next_run_at: null,
+      },
+    };
+    const task = {
+      attributes: { id: 3, sequence_id: 1, action: "command", payload: "save-all", time_offset: 5, continue_on_failure: false },
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(backup), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(backup), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(schedule), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(schedule), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(task), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const { mcpClient } = await setupClient(fetchMock);
+    const gotBkp = await mcpClient.callTool({
+      name: "get_backup",
+      arguments: { server_id: "00000000", backup_uuid: "bkp-9" },
+    });
+    expect(JSON.parse((gotBkp.content as Array<{ text: string }>)[0].text).is_locked).toBe(true);
+
+    const locked = await mcpClient.callTool({
+      name: "toggle_backup_lock",
+      arguments: { server_id: "00000000", backup_uuid: "bkp-9" },
+    });
+    expect(JSON.parse((locked.content as Array<{ text: string }>)[0].text).uuid).toBe("bkp-9");
+
+    const gotSched = await mcpClient.callTool({
+      name: "get_schedule",
+      arguments: { server_id: "00000000", schedule_id: 8 },
+    });
+    expect(JSON.parse((gotSched.content as Array<{ text: string }>)[0].text).cron).toBe("5 * * * *");
+
+    const updSched = await mcpClient.callTool({
+      name: "update_schedule",
+      arguments: {
+        server_id: "00000000",
+        schedule_id: 8,
+        name: "Updated Cron",
+        minute: "5",
+        hour: "*",
+        day_of_month: "*",
+        month: "*",
+        day_of_week: "*",
+      },
+    });
+    expect(JSON.parse((updSched.content as Array<{ text: string }>)[0].text).name).toBe("Updated Cron");
+
+    const updTask = await mcpClient.callTool({
+      name: "update_schedule_task",
+      arguments: {
+        server_id: "00000000",
+        schedule_id: 8,
+        task_id: 3,
+        action: "command",
+        payload: "save-all",
+        time_offset: 5,
+      },
+    });
+    expect(JSON.parse((updTask.content as Array<{ text: string }>)[0].text).payload).toBe("save-all");
+
+    const delTask = await mcpClient.callTool({
+      name: "delete_schedule_task",
+      arguments: { server_id: "00000000", schedule_id: 8, task_id: 3 },
+    });
+    expect(JSON.parse((delTask.content as Array<{ text: string }>)[0].text)).toEqual({
+      ok: true,
+      deleted_task_id: 3,
+    });
+  });
 });

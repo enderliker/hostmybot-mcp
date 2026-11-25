@@ -114,4 +114,42 @@ describe("settings tools", () => {
       allocations: [{ id: 101, ip: "192.0.2.10", port: 3000, is_default: true }],
     });
   });
+
+  it("creates, updates notes, sets primary, and deletes allocations", async () => {
+    const alloc = { attributes: { id: 102, ip: "192.0.2.10", ip_alias: null, port: 3001, notes: "api", is_default: true } };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(alloc), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(alloc), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(alloc), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const { mcpClient } = await setupClient(fetchMock);
+    const created = await mcpClient.callTool({
+      name: "create_allocation",
+      arguments: { server_id: "00000000" },
+    });
+    expect(JSON.parse((created.content as Array<{ text: string }>)[0].text).id).toBe(102);
+
+    const noted = await mcpClient.callTool({
+      name: "update_allocation_notes",
+      arguments: { server_id: "00000000", allocation_id: 102, notes: "api" },
+    });
+    expect(JSON.parse((noted.content as Array<{ text: string }>)[0].text).notes).toBe("api");
+
+    const primary = await mcpClient.callTool({
+      name: "set_primary_allocation",
+      arguments: { server_id: "00000000", allocation_id: 102 },
+    });
+    expect(JSON.parse((primary.content as Array<{ text: string }>)[0].text).is_default).toBe(true);
+
+    const deleted = await mcpClient.callTool({
+      name: "delete_allocation",
+      arguments: { server_id: "00000000", allocation_id: 102 },
+    });
+    expect(JSON.parse((deleted.content as Array<{ text: string }>)[0].text)).toEqual({
+      ok: true,
+      deleted_allocation_id: 102,
+    });
+  });
 });

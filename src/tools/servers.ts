@@ -1,7 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { PterodactylClient } from "../client.js";
-import { formatBytes, withToolHandler } from "../format.js";
+import {
+  type ActivityLogAttributes,
+  formatBytes,
+  summarizeActivity,
+  withToolHandler,
+} from "../format.js";
 
 interface PterodactylListResponse<T> {
   data: Array<{ attributes: T }>;
@@ -240,6 +245,86 @@ export function registerServerTools(server: McpServer, client: PterodactylClient
         body: { command },
       });
       return { ok: true, server_id, command };
+    }),
+  );
+
+  server.registerTool(
+    "get_websocket_credentials",
+    {
+      description: "Get the Wings WebSocket URL and JWT token for live console streaming.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    withToolHandler(async ({ server_id }) => client.getWebsocketCredentials(server_id)),
+  );
+
+  server.registerTool(
+    "get_console_logs",
+    {
+      description:
+        "Connect briefly to the server WebSocket console, retrieve recent console output lines, and disconnect cleanly.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        max_lines: z
+          .number()
+          .int()
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe("Maximum number of trailing log lines to return (default 100)"),
+        timeout_ms: z
+          .number()
+          .int()
+          .min(300)
+          .max(15000)
+          .optional()
+          .describe("Maximum wait window in ms before disconnecting (default 2500)"),
+        strip_ansi: z
+          .boolean()
+          .optional()
+          .describe("Strip ANSI terminal color sequences to reduce token usage (default true)"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    withToolHandler(async ({ server_id, max_lines, timeout_ms, strip_ansi }) =>
+      client.readConsoleLogs(server_id, {
+        maxLines: max_lines,
+        timeoutMs: timeout_ms,
+        stripAnsi: strip_ansi,
+      }),
+    ),
+  );
+
+  server.registerTool(
+    "get_server_activity",
+    {
+      description: "Get recent activity audit logs for a specific server.",
+      inputSchema: {
+        server_id: z.string().min(1).describe("Short server identifier"),
+        page: z.number().int().min(1).optional().describe("Pagination page (default 1)"),
+        per_page: z.number().int().min(1).max(100).optional().describe("Entries per page"),
+        event: z.string().optional().describe("Optional event filter (e.g. 'server:file.write')"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    withToolHandler(async ({ server_id, page, per_page, event }) => {
+      const res = await client.request<PterodactylListResponse<ActivityLogAttributes>>(
+        "GET",
+        `/api/client/servers/${encodeURIComponent(server_id)}/activity`,
+        {
+          query: {
+            page,
+            per_page,
+            "filter[event]": event,
+          },
+        },
+      );
+      return {
+        events: res.data.map((item) => summarizeActivity(item.attributes)),
+        pagination: res.meta?.pagination,
+      };
     }),
   );
 }

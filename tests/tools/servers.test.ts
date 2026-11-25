@@ -1,13 +1,15 @@
+import { EventEmitter } from "node:events";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it, vi } from "vitest";
-import { PterodactylClient } from "../../src/client.js";
+import { type ConsoleSocketLike, PterodactylClient, type WebSocketFactory } from "../../src/client.js";
 import { createHostMyBotServer } from "../../src/index.js";
 
-async function setupClient(fetchMock: typeof fetch) {
+async function setupClient(fetchMock: typeof fetch, wsFactory?: WebSocketFactory) {
   const api = new PterodactylClient(
     { apiKey: "ptlc_test", baseUrl: "https://client.hostmybot.net" },
     fetchMock,
+    wsFactory,
   );
   const mcpServer = createHostMyBotServer(api);
   const mcpClient = new Client({ name: "test-client", version: "1.0.0" });
@@ -143,6 +145,98 @@ describe("server tools", () => {
     );
     expect(fetchMock.mock.calls[1][0]).toBe(
       "https://client.hostmybot.net/api/client/servers/00000000/command",
+    );
+  });
+
+  it("get_websocket_credentials, get_console_logs, and get_server_activity work properly", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: { token: "jwt-1", socket: "wss://node1.example.com/ws" } }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: { token: "jwt-2", socket: "wss://node1.example.com/ws" } }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                attributes: {
+                  id: "act-1",
+                  event: "server:power.start",
+                  is_api: true,
+                  ip: "192.0.2.1",
+                  timestamp: "2026-01-01T00:00:00Z",
+                },
+              },
+            ],
+            meta: { pagination: { total: 1, count: 1, per_page: 25, current_page: 1, total_pages: 1 } },
+          }),
+          { status: 200 },
+        ),
+      );
+
+    let capturedOrigin = "";
+    const wsFactory: WebSocketFactory = (_url, origin) => {
+      capturedOrigin = origin;
+      const emitter = new EventEmitter();
+      const socket: ConsoleSocketLike = {
+        on: (ev, fn) => emitter.on(ev, fn),
+        send: (raw) => {
+          const msg = JSON.parse(raw) as { event: string };
+          if (msg.event === "auth") {
+            emitter.emit("message", JSON.stringify({ event: "auth success" }));
+          } else if (msg.event === "send logs") {
+            emitter.emit("message", JSON.stringify({ event: "status", args: ["running"] }));
+            emitter.emit(
+              "message",
+              JSON.stringify({
+                event: "console output",
+                args: ["\x1b[32mBooting\x1b[0m\nReady!"],
+              }),
+            );
+          }
+        },
+        close: () => emitter.emit("close"),
+      };
+      queueMicrotask(() => emitter.emit("open"));
+      return socket;
+    };
+
+    const { mcpClient } = await setupClient(fetchMock, wsFactory);
+    const creds = await mcpClient.callTool({
+      name: "get_websocket_credentials",
+      arguments: { server_id: "00000000" },
+    });
+    expect(JSON.parse((creds.content as Array<{ text: string }>)[0].text)).toEqual({
+      token: "jwt-1",
+      socket: "wss://node1.example.com/ws",
+    });
+
+    const logs = await mcpClient.callTool({
+      name: "get_console_logs",
+      arguments: { server_id: "00000000", timeout_ms: 1500 },
+    });
+    expect(capturedOrigin).toBe("https://client.hostmybot.net");
+    expect(JSON.parse((logs.content as Array<{ text: string }>)[0].text)).toEqual({
+      status: "running",
+      line_count: 2,
+      lines: ["Booting", "Ready!"],
+    });
+
+    const activity = await mcpClient.callTool({
+      name: "get_server_activity",
+      arguments: { server_id: "00000000" },
+    });
+    expect(JSON.parse((activity.content as Array<{ text: string }>)[0].text).events[0].event).toBe(
+      "server:power.start",
     );
   });
 });
